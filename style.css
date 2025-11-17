@@ -357,6 +357,98 @@ body {
   color: #06283b;
 }
 
+.optimization-panel {
+  margin-top: 2rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 22px;
+  padding: 1.5rem;
+  background: rgb(255 255 255 / 0.02);
+}
+
+.optim-steps {
+  margin-top: 1.5rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.optim-card {
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: 18px;
+  padding: 1.25rem;
+  background: rgb(5 6 12 / 0.35);
+}
+
+.optim-card h4 {
+  margin-top: 0;
+}
+
+.optim-potentials {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+
+.optim-potentials ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+}
+
+.optim-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.optim-table th,
+.optim-table td {
+  border: 1px solid rgb(255 255 255 / 0.08);
+  padding: 0.4rem;
+  text-align: center;
+}
+
+.delta-positive {
+  background: rgb(255 92 92 / 0.25);
+}
+
+.delta-entering {
+  border: 2px solid #ff7676;
+  position: relative;
+}
+
+.delta-entering::after {
+  content: "★";
+  font-size: 0.7rem;
+  color: #ffd166;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.delta-negative {
+  background: rgb(255 255 255 / 0.03);
+  color: var(--muted);
+}
+
+.delta-zero {
+  background: rgb(255 255 255 / 0.08);
+}
+
+.cycle-path {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.04);
+  font-size: 0.9rem;
+}
+
+.theta-info {
+  font-weight: 600;
+}
+
 .plan-table {
   margin-top: 0.5rem;
 }

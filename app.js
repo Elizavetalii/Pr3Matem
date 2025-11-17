@@ -18,6 +18,9 @@ const solverSection = document.getElementById("solver");
 const optimizeBtn = document.getElementById("optimizeBtn");
 const balancedMatrixEl = document.getElementById("balancedMatrix");
 const planPreviewEl = document.getElementById("planPreview");
+const optimizationPanel = document.getElementById("optimizationPanel");
+const optimizationIntro = document.getElementById("optimizationIntro");
+const optimizationSteps = document.getElementById("optimizationSteps");
 
 let currentRows = Number(supplierInput.value) || 3;
 let currentCols = Number(consumerInput.value) || 3;
@@ -217,6 +220,16 @@ const collectProblem = () => {
   };
 };
 
+const resetOptimizationPanel = () => {
+  if (optimizationIntro) {
+    optimizationIntro.textContent =
+      "После построения опорного плана нажмите «Оптимизировать план», чтобы увидеть вычисление потенциалов, Δ-оценок и цикл перераспределения.";
+  }
+  if (optimizationSteps) {
+    optimizationSteps.innerHTML = "";
+  }
+};
+
 const resetPreviews = () => {
   if (balancedMatrixEl) {
     balancedMatrixEl.innerHTML = `
@@ -234,6 +247,7 @@ const resetPreviews = () => {
   if (optimizeBtn) {
     optimizeBtn.disabled = true;
   }
+  resetOptimizationPanel();
 };
 
 const balanceProblem = (problem) => {
@@ -367,6 +381,147 @@ const createTableStructure = (problem) => {
 };
 
 const cloneMatrix = (matrix) => matrix.map((row) => row.slice());
+
+const formatCellLabel = (problem, cell) =>
+  `${problem.supplyLabels[cell.row]} — ${problem.demandLabels[cell.col]}`;
+
+const buildPotentialsBlock = (problem, potentials) => {
+  const wrapper = document.createElement("div");
+  wrapper.className = "optim-potentials";
+  const supplyList = document.createElement("div");
+  supplyList.innerHTML = `<strong>u (поставщики)</strong>`;
+  const supplyUl = document.createElement("ul");
+  problem.supplyLabels.forEach((label, idx) => {
+    const li = document.createElement("li");
+    li.textContent = `${label}: ${formatNumber(potentials.u[idx] ?? 0)}`;
+    supplyUl.appendChild(li);
+  });
+  supplyList.appendChild(supplyUl);
+  const demandList = document.createElement("div");
+  demandList.innerHTML = `<strong>v (потребители)</strong>`;
+  const demandUl = document.createElement("ul");
+  problem.demandLabels.forEach((label, idx) => {
+    const li = document.createElement("li");
+    li.textContent = `${label}: ${formatNumber(potentials.v[idx] ?? 0)}`;
+    demandUl.appendChild(li);
+  });
+  demandList.appendChild(demandUl);
+  wrapper.appendChild(supplyList);
+  wrapper.appendChild(demandList);
+  return wrapper;
+};
+
+const buildDeltaTable = (problem, deltas, entering) => {
+  const table = document.createElement("table");
+  table.className = "optim-table";
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  headRow.appendChild(document.createElement("th"));
+  problem.demandLabels.forEach((label) => {
+    const th = document.createElement("th");
+    th.textContent = label;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+  const tbody = document.createElement("tbody");
+  deltas.forEach((rowDeltas, i) => {
+    const tr = document.createElement("tr");
+    const rowLabel = document.createElement("th");
+    rowLabel.textContent = problem.supplyLabels[i];
+    tr.appendChild(rowLabel);
+    rowDeltas.forEach((delta, j) => {
+      const td = document.createElement("td");
+      td.textContent = formatNumber(delta);
+      if (delta > EPS) {
+        td.classList.add("delta-positive");
+      } else if (Math.abs(delta) <= EPS) {
+        td.classList.add("delta-zero");
+      } else {
+        td.classList.add("delta-negative");
+      }
+      if (entering && entering.row === i && entering.col === j) {
+        td.classList.add("delta-entering");
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  return table;
+};
+
+const renderOptimizationDetails = (history, problem) => {
+  if (!optimizationSteps || !optimizationIntro) return;
+  if (!history || !history.length) {
+    optimizationIntro.textContent =
+      "Все Δ-оценки неположительны — план уже оптимален.";
+    optimizationSteps.innerHTML = "";
+    return;
+  }
+
+  optimizationIntro.textContent =
+    "Ниже показаны итерации метода потенциалов: потенциалы, Δ-оценки и построение цикла.";
+  optimizationSteps.innerHTML = "";
+  history.forEach((step) => {
+    const card = document.createElement("article");
+    card.className = "optim-card";
+    const title = document.createElement("h4");
+    title.textContent = `Итерация ${step.index}`;
+    card.appendChild(title);
+
+    card.appendChild(buildPotentialsBlock(problem, step.potentials));
+
+    const deltaHeading = document.createElement("p");
+    deltaHeading.innerHTML =
+      "<strong>Δ = uᵢ + vⱼ − cᵢⱼ</strong>. Красные ячейки означают возможность улучшить план.";
+    card.appendChild(deltaHeading);
+    card.appendChild(buildDeltaTable(problem, step.deltas, step.entering));
+
+    if (step.entering && step.loopPath) {
+      const selected = document.createElement("p");
+      selected.innerHTML = `Выбираем клетку с максимальной Δ: <strong>${formatCellLabel(
+        problem,
+        step.entering,
+      )}</strong> (Δ = ${formatNumber(step.deltaValue)}).`;
+      card.appendChild(selected);
+      const cycle = document.createElement("div");
+      cycle.className = "cycle-path";
+      const parts = step.loopPath.map(
+        (cell, idx) =>
+          `${formatCellLabel(problem, cell)} ${step.loopSigns[idx] === "+" ? "(+)" : "(−)"}`,
+      );
+      cycle.textContent = `Цикл перераспределения: ${parts.join(" → ")}`;
+      card.appendChild(cycle);
+      if (step.thetaSources) {
+        const thetaInfo = document.createElement("p");
+        thetaInfo.className = "theta-info";
+        const sources = step.thetaSources
+          .map(
+            (item) =>
+              `${formatCellLabel(problem, item.cell)} = ${formatNumber(item.qty)}`,
+          )
+          .join(", ");
+        thetaInfo.textContent = `Минимум среди ячеек со знаком (−): ${formatNumber(
+          step.theta,
+        )}. Участвуют: ${sources}.`;
+        card.appendChild(thetaInfo);
+      }
+    } else if (step.note) {
+      const warn = document.createElement("p");
+      warn.className = "theta-info";
+      warn.textContent = step.note;
+      card.appendChild(warn);
+    } else if (step.optimalSnapshot) {
+      const note = document.createElement("p");
+      note.className = "theta-info";
+      note.textContent =
+        "Все Δ-оценки ≤ 0, поэтому дальнейшая оптимизация не требуется.";
+      card.appendChild(note);
+    }
+    optimizationSteps.appendChild(card);
+  });
+};
 
 const renderBalancedMatrix = (problem) => {
   if (!balancedMatrixEl) return;
@@ -524,20 +679,20 @@ const computePotentials = (problem, basis, rows, cols) => {
   return { u, v };
 };
 
-const findEnteringCell = (problem, basis, u, v, rows, cols) => {
+const findEnteringCell = (deltas, basis, rows, cols) => {
   const basisSet = new Set(basis.map((cell) => `${cell.row}-${cell.col}`));
   let candidate = null;
   for (let i = 0; i < rows; i += 1) {
     for (let j = 0; j < cols; j += 1) {
       const key = `${i}-${j}`;
       if (basisSet.has(key)) continue;
-      const reduced = problem.costs[i][j] - (u[i] + v[j]);
-      if (candidate === null || reduced < candidate.reduced) {
-        candidate = { row: i, col: j, reduced };
+      const delta = deltas[i][j];
+      if (!candidate || delta > candidate.delta) {
+        candidate = { row: i, col: j, delta };
       }
     }
   }
-  if (!candidate || candidate.reduced >= -EPS) {
+  if (!candidate || candidate.delta <= EPS) {
     return null;
   }
   return candidate;
@@ -598,39 +753,80 @@ const optimizeAllocations = (problem, allocations) => {
   const cols = allocations[0].length;
   const maxIterations = 30;
   let improved = false;
+  const history = [];
   for (let iter = 0; iter < maxIterations; iter += 1) {
     const basis = getBasisCells(allocations);
     const { u, v } = computePotentials(problem, basis, rows, cols);
-    const entering = findEnteringCell(problem, basis, u, v, rows, cols);
+    const deltas = Array.from({ length: rows }, (_, i) =>
+      Array.from({ length: cols }, (_, j) => u[i] + v[j] - problem.costs[i][j]),
+    );
+    const entering = findEnteringCell(deltas, basis, rows, cols);
     if (!entering) {
-      return { allocations, iterations: iter, optimal: true, improved };
+      history.push({
+        index: history.length + 1,
+        potentials: { u, v },
+        deltas,
+        optimalSnapshot: true,
+      });
+      return { allocations, iterations: iter, optimal: true, improved, history };
     }
     const loop = findAdjustmentLoop(entering, basis, rows, cols);
     if (!loop) {
+      history.push({
+        index: history.length + 1,
+        potentials: { u, v },
+        deltas,
+        entering,
+        deltaValue: entering.delta,
+        note: "Не удалось построить цикл перераспределения для выбранной клетки.",
+      });
       return {
         allocations,
         iterations: iter,
         optimal: false,
         message: "Не удалось построить цикл для оптимизации.",
         improved,
+        history,
       };
     }
-    let theta = Infinity;
-    for (let idx = 1; idx < loop.length - 1; idx += 2) {
-      const cell = loop[idx];
-      theta = Math.min(theta, allocations[cell.row][cell.col]);
+    const loopPath = loop.slice(0, -1);
+    const loopSigns = loopPath.map((_, idx) => (idx % 2 === 0 ? "+" : "-"));
+    const thetaCandidates = [];
+    for (let idx = 1; idx < loopPath.length; idx += 2) {
+      const cell = loopPath[idx];
+      thetaCandidates.push({ cell, qty: allocations[cell.row][cell.col] });
     }
+    let theta = Math.min(...thetaCandidates.map((item) => item.qty));
     if (!Number.isFinite(theta)) {
+      history.push({
+        index: history.length + 1,
+        potentials: { u, v },
+        deltas,
+        entering,
+        deltaValue: entering.delta,
+        note: "Не удалось определить минимальный груз для перераспределения.",
+      });
       return {
         allocations,
         iterations: iter,
         optimal: false,
         message: "Не удалось вычислить корректирующий шаг.",
         improved,
+        history,
       };
     }
-    for (let idx = 0; idx < loop.length - 1; idx += 1) {
-      const cell = loop[idx];
+    history.push({
+      index: history.length + 1,
+      potentials: { u, v },
+      deltas,
+      entering,
+      deltaValue: entering.delta,
+      loopPath,
+      loopSigns,
+      theta,
+      thetaSources: thetaCandidates,
+    });
+    loopPath.forEach((cell, idx) => {
       if (idx % 2 === 0) {
         allocations[cell.row][cell.col] += theta;
       } else {
@@ -639,7 +835,7 @@ const optimizeAllocations = (problem, allocations) => {
       if (allocations[cell.row][cell.col] < EPS) {
         allocations[cell.row][cell.col] = 0;
       }
-    }
+    });
     improved = true;
   }
   return {
@@ -648,6 +844,7 @@ const optimizeAllocations = (problem, allocations) => {
     optimal: false,
     message: "Превышен лимит итераций оптимизации.",
     improved,
+    history,
   };
 };
 
@@ -692,6 +889,7 @@ const handleOptimize = () => {
   lastSolution.totalCost = totalCost;
   renderPlanPreview(lastSolution.problem, result.allocations);
   renderSolution(lastSolution.problem, result.allocations, totalCost);
+  renderOptimizationDetails(result.history, lastSolution.problem);
   if (result.optimal) {
     const text = result.improved
       ? `План оптимизирован. Итоговая стоимость: ${formatNumber(totalCost)}.`
