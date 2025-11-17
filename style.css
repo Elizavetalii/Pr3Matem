@@ -449,6 +449,37 @@ body {
   font-weight: 600;
 }
 
+.cycle-table {
+  width: 100%;
+  margin-top: 0.75rem;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.cycle-table th,
+.cycle-table td {
+  border: 1px solid rgb(255 255 255 / 0.08);
+  padding: 0.35rem;
+  text-align: center;
+}
+
+.cycle-plus {
+  background: rgb(102 255 204 / 0.2);
+  border: 1px solid rgb(102 255 204 / 0.5);
+}
+
+.cycle-minus {
+  background: rgb(255 92 117 / 0.25);
+  border: 1px solid rgb(255 92 117 / 0.45);
+}
+
+.answer {
+  margin-top: 1rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
 .plan-table {
   margin-top: 0.5rem;
 }

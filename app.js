@@ -18,6 +18,7 @@ const solverSection = document.getElementById("solver");
 const optimizeBtn = document.getElementById("optimizeBtn");
 const balancedMatrixEl = document.getElementById("balancedMatrix");
 const planPreviewEl = document.getElementById("planPreview");
+const answerSummaryEl = document.getElementById("answerSummary");
 const optimizationPanel = document.getElementById("optimizationPanel");
 const optimizationIntro = document.getElementById("optimizationIntro");
 const optimizationSteps = document.getElementById("optimizationSteps");
@@ -244,6 +245,9 @@ const resetPreviews = () => {
     `;
   }
   solutionArea.innerHTML = "";
+  if (answerSummaryEl) {
+    answerSummaryEl.textContent = "";
+  }
   if (optimizeBtn) {
     optimizeBtn.disabled = true;
   }
@@ -451,6 +455,51 @@ const buildDeltaTable = (problem, deltas, entering) => {
   return table;
 };
 
+const buildCycleTable = (problem, step) => {
+  if (!step.loopPath || !step.allocationSnapshot) return null;
+  const table = document.createElement("table");
+  table.className = "cycle-table";
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  headRow.appendChild(document.createElement("th"));
+  problem.demandLabels.forEach((label) => {
+    const th = document.createElement("th");
+    th.textContent = label;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+  const tbody = document.createElement("tbody");
+  const signMap = new Map();
+  if (step.loopPath && step.loopSigns) {
+    step.loopPath.forEach((cell, idx) => {
+      signMap.set(`${cell.row}-${cell.col}`, step.loopSigns[idx]);
+    });
+  }
+  step.allocationSnapshot.forEach((row, i) => {
+    const tr = document.createElement("tr");
+    const label = document.createElement("th");
+    label.textContent = problem.supplyLabels[i];
+    tr.appendChild(label);
+    row.forEach((qty, j) => {
+      const td = document.createElement("td");
+      const cost = problem.costs[i][j];
+      const sign = signMap.get(`${i}-${j}`);
+      const allocationText = qty > EPS ? `[${formatNumber(qty)}]` : "[0]";
+      td.innerHTML = `${formatNumber(cost)} ${allocationText}`;
+      if (sign === "+") {
+        td.classList.add("cycle-plus");
+      } else if (sign === "-") {
+        td.classList.add("cycle-minus");
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  return table;
+};
+
 const renderOptimizationDetails = (history, problem) => {
   if (!optimizationSteps || !optimizationIntro) return;
   if (!history || !history.length) {
@@ -493,6 +542,15 @@ const renderOptimizationDetails = (history, problem) => {
       );
       cycle.textContent = `Цикл перераспределения: ${parts.join(" → ")}`;
       card.appendChild(cycle);
+      const cycleNote = document.createElement("p");
+      cycleNote.className = "muted";
+      cycleNote.textContent =
+        "Цикл всегда строится по занятым клеткам с чередованием знаков (+ добавляем груз, − вычитаем). Стартуем в выбранной свободной клетке.";
+      card.appendChild(cycleNote);
+      const cycleTable = buildCycleTable(problem, step);
+      if (cycleTable) {
+        card.appendChild(cycleTable);
+      }
       if (step.thetaSources) {
         const thetaInfo = document.createElement("p");
         thetaInfo.className = "theta-info";
@@ -613,7 +671,14 @@ const animateSolution = (problem, steps, allocations, totalCost) => {
   });
 };
 
-const renderSolution = (problem, allocations, totalCost) => {
+const updateAnswerSummary = (message) => {
+  if (!answerSummaryEl) {
+    return;
+  }
+  answerSummaryEl.textContent = message || "";
+};
+
+const renderSolution = (problem, allocations, totalCost, summaryMessage = "") => {
   const { table, cellRefs } = createTableStructure(problem);
   Object.entries(cellRefs).forEach(([key, cell]) => {
     const [row, col] = key.split("-").map(Number);
@@ -636,6 +701,7 @@ const renderSolution = (problem, allocations, totalCost) => {
   solutionArea.appendChild(title);
   solutionArea.appendChild(summary);
   solutionArea.appendChild(table);
+  updateAnswerSummary(summaryMessage);
 };
 
 const getBasisCells = (allocations) => {
@@ -825,6 +891,7 @@ const optimizeAllocations = (problem, allocations) => {
       loopSigns,
       theta,
       thetaSources: thetaCandidates,
+      allocationSnapshot: cloneMatrix(allocations),
     });
     loopPath.forEach((cell, idx) => {
       if (idx % 2 === 0) {
@@ -895,13 +962,20 @@ const handleOptimize = () => {
       ? `План оптимизирован. Итоговая стоимость: ${formatNumber(totalCost)}.`
       : `План уже оптимален. Стоимость: ${formatNumber(totalCost)}.`;
     setNote(text, "accent");
+    updateAnswerSummary(
+      `Ответ: при найденном оптимальном решении стоимость перевозок составляет ${formatNumber(
+        totalCost,
+      )} у.е.`,
+    );
   } else if (result.message) {
     setNote(result.message, "error");
+    updateAnswerSummary("");
   } else {
     setNote(
       `План улучшен за ${result.iterations} итераций. Стоимость: ${formatNumber(totalCost)}.`,
       "accent",
     );
+    updateAnswerSummary("");
   }
 };
 
