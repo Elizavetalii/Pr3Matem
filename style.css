@@ -101,6 +101,14 @@ body {
   box-shadow: var(--glow);
 }
 
+.primary-btn:disabled,
+.ghost-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  border-color: rgb(255 255 255 / 0.2);
+}
+
 .primary-btn:hover {
   transform: translateY(-1px) scale(1.01);
 }

@@ -15,12 +15,14 @@ const solutionArea = document.getElementById("solutionArea");
 const scrollBtn = document.getElementById("scrollToSolver");
 const presetBtn = document.getElementById("generatePreset");
 const solverSection = document.getElementById("solver");
+const optimizeBtn = document.getElementById("optimizeBtn");
 const balancedMatrixEl = document.getElementById("balancedMatrix");
 const planPreviewEl = document.getElementById("planPreview");
 
 let currentRows = Number(supplierInput.value) || 3;
 let currentCols = Number(consumerInput.value) || 3;
 const animationTimers = [];
+let lastSolution = null;
 
 const clampDimension = (value) => Math.min(6, Math.max(1, value));
 
@@ -229,6 +231,9 @@ const resetPreviews = () => {
     `;
   }
   solutionArea.innerHTML = "";
+  if (optimizeBtn) {
+    optimizeBtn.disabled = true;
+  }
 };
 
 const balanceProblem = (problem) => {
@@ -361,6 +366,8 @@ const createTableStructure = (problem) => {
   return { table, cellRefs };
 };
 
+const cloneMatrix = (matrix) => matrix.map((row) => row.slice());
+
 const renderBalancedMatrix = (problem) => {
   if (!balancedMatrixEl) return;
   const { table, cellRefs } = createTableStructure(problem);
@@ -476,7 +483,176 @@ const renderSolution = (problem, allocations, totalCost) => {
   solutionArea.appendChild(table);
 };
 
+const getBasisCells = (allocations) => {
+  const basis = [];
+  allocations.forEach((row, i) => {
+    row.forEach((value, j) => {
+      if (value > EPS) {
+        basis.push({ row: i, col: j });
+      }
+    });
+  });
+  return basis;
+};
+
+const computePotentials = (problem, basis, rows, cols) => {
+  const u = Array(rows).fill(null);
+  const v = Array(cols).fill(null);
+  if (!basis.length) {
+    return { u: u.fill(0), v: v.fill(0) };
+  }
+  u[basis[0].row] = 0;
+  let updated = true;
+  while (updated) {
+    updated = false;
+    basis.forEach(({ row, col }) => {
+      if (u[row] !== null && v[col] === null) {
+        v[col] = problem.costs[row][col] - u[row];
+        updated = true;
+      } else if (v[col] !== null && u[row] === null) {
+        u[row] = problem.costs[row][col] - v[col];
+        updated = true;
+      }
+    });
+  }
+  for (let i = 0; i < rows; i += 1) {
+    if (u[i] === null) u[i] = 0;
+  }
+  for (let j = 0; j < cols; j += 1) {
+    if (v[j] === null) v[j] = 0;
+  }
+  return { u, v };
+};
+
+const findEnteringCell = (problem, basis, u, v, rows, cols) => {
+  const basisSet = new Set(basis.map((cell) => `${cell.row}-${cell.col}`));
+  let candidate = null;
+  for (let i = 0; i < rows; i += 1) {
+    for (let j = 0; j < cols; j += 1) {
+      const key = `${i}-${j}`;
+      if (basisSet.has(key)) continue;
+      const reduced = problem.costs[i][j] - (u[i] + v[j]);
+      if (candidate === null || reduced < candidate.reduced) {
+        candidate = { row: i, col: j, reduced };
+      }
+    }
+  }
+  if (!candidate || candidate.reduced >= -EPS) {
+    return null;
+  }
+  return candidate;
+};
+
+const findAdjustmentLoop = (entering, basis, rows, cols) => {
+  const key = (cell) => `${cell.row}-${cell.col}`;
+  const basisKeys = new Set(basis.map(key));
+  basisKeys.add(key(entering));
+
+  const rowMap = new Map();
+  const colMap = new Map();
+  const addToMaps = ({ row, col }) => {
+    if (!rowMap.has(row)) rowMap.set(row, new Set());
+    if (!colMap.has(col)) colMap.set(col, new Set());
+    rowMap.get(row).add(col);
+    colMap.get(col).add(row);
+  };
+
+  [...basis, entering].forEach(addToMaps);
+
+  const path = [entering];
+  const sameCell = (a, b) => a.row === b.row && a.col === b.col;
+
+  const dfs = (current, moveRow) => {
+    const neighborsSet = moveRow ? rowMap.get(current.row) : colMap.get(current.col);
+    if (!neighborsSet) return false;
+    const neighbors = [...neighborsSet];
+    for (const value of neighbors) {
+      const next = moveRow ? { row: current.row, col: value } : { row: value, col: current.col };
+      if (sameCell(next, current)) continue;
+      if (!basisKeys.has(key(next))) continue;
+      const backToStart = sameCell(next, entering);
+      if (backToStart && path.length >= 4) {
+        path.push(entering);
+        return true;
+      }
+      if (path.some((cell) => sameCell(cell, next))) continue;
+      path.push(next);
+      if (dfs(next, !moveRow)) return true;
+      path.pop();
+    }
+    return false;
+  };
+
+  if (dfs(entering, true)) {
+    return [...path];
+  }
+  path.length = 1;
+  if (dfs(entering, false)) {
+    return [...path];
+  }
+  return null;
+};
+
+const optimizeAllocations = (problem, allocations) => {
+  const rows = allocations.length;
+  const cols = allocations[0].length;
+  const maxIterations = 30;
+  let improved = false;
+  for (let iter = 0; iter < maxIterations; iter += 1) {
+    const basis = getBasisCells(allocations);
+    const { u, v } = computePotentials(problem, basis, rows, cols);
+    const entering = findEnteringCell(problem, basis, u, v, rows, cols);
+    if (!entering) {
+      return { allocations, iterations: iter, optimal: true, improved };
+    }
+    const loop = findAdjustmentLoop(entering, basis, rows, cols);
+    if (!loop) {
+      return {
+        allocations,
+        iterations: iter,
+        optimal: false,
+        message: "Не удалось построить цикл для оптимизации.",
+        improved,
+      };
+    }
+    let theta = Infinity;
+    for (let idx = 1; idx < loop.length - 1; idx += 2) {
+      const cell = loop[idx];
+      theta = Math.min(theta, allocations[cell.row][cell.col]);
+    }
+    if (!Number.isFinite(theta)) {
+      return {
+        allocations,
+        iterations: iter,
+        optimal: false,
+        message: "Не удалось вычислить корректирующий шаг.",
+        improved,
+      };
+    }
+    for (let idx = 0; idx < loop.length - 1; idx += 1) {
+      const cell = loop[idx];
+      if (idx % 2 === 0) {
+        allocations[cell.row][cell.col] += theta;
+      } else {
+        allocations[cell.row][cell.col] -= theta;
+      }
+      if (allocations[cell.row][cell.col] < EPS) {
+        allocations[cell.row][cell.col] = 0;
+      }
+    }
+    improved = true;
+  }
+  return {
+    allocations,
+    iterations: maxIterations,
+    optimal: false,
+    message: "Превышен лимит итераций оптимизации.",
+    improved,
+  };
+};
+
 const handleSolve = () => {
+  lastSolution = null;
   resetPreviews();
   try {
     setNote("Запускаем расчёт и проверяем балансировку...", "accent");
@@ -489,10 +665,45 @@ const handleSolve = () => {
     animateSolution(problem, steps, allocations, totalCost);
     renderPlanPreview(problem, allocations);
     renderSolution(problem, allocations, totalCost);
+    lastSolution = {
+      problem,
+      allocations: cloneMatrix(allocations),
+      totalCost,
+    };
+    if (optimizeBtn) {
+      optimizeBtn.disabled = false;
+    }
   } catch (error) {
     setNote(error.message, "error");
     clearAnimation();
     resetPreviews();
+  }
+};
+
+const handleOptimize = () => {
+  if (!lastSolution) {
+    setNote("Сначала постройте опорный план.", "error");
+    return;
+  }
+  const working = cloneMatrix(lastSolution.allocations);
+  const result = optimizeAllocations(lastSolution.problem, working);
+  const totalCost = computeTotalCost(lastSolution.problem, result.allocations);
+  lastSolution.allocations = cloneMatrix(result.allocations);
+  lastSolution.totalCost = totalCost;
+  renderPlanPreview(lastSolution.problem, result.allocations);
+  renderSolution(lastSolution.problem, result.allocations, totalCost);
+  if (result.optimal) {
+    const text = result.improved
+      ? `План оптимизирован. Итоговая стоимость: ${formatNumber(totalCost)}.`
+      : `План уже оптимален. Стоимость: ${formatNumber(totalCost)}.`;
+    setNote(text, "accent");
+  } else if (result.message) {
+    setNote(result.message, "error");
+  } else {
+    setNote(
+      `План улучшен за ${result.iterations} итераций. Стоимость: ${formatNumber(totalCost)}.`,
+      "accent",
+    );
   }
 };
 
@@ -513,6 +724,9 @@ applySizeBtn.addEventListener("click", () => {
 
 generateRandomBtn.addEventListener("click", generateRandomData);
 solveBtn.addEventListener("click", handleSolve);
+if (optimizeBtn) {
+  optimizeBtn.addEventListener("click", handleOptimize);
+}
 
 scrollBtn.addEventListener("click", () => {
   solverSection.scrollIntoView({ behavior: "smooth" });
