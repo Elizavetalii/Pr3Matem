@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Северо-западный угол — визуальный решатель</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="backdrop" aria-hidden="true"></div>
+    <header class="hero">
+      <div class="hero__text">
+        <p class="eyebrow">Метод северо-западного угла</p>
+        <h1>Транспортная задача c интерактивной анимацией</h1>
+        <p class="lead">
+          Задайте количество поставщиков и потребителей, сгенерируйте случайные
+          данные или корректируйте тарифы вручную. Алгоритм автоматически
+          балансирует систему и демонстрирует шаги построения опорного решения.
+        </p>
+        <div class="hero__cta">
+          <button id="generatePreset" class="ghost-btn">
+            Сгенерировать пример
+          </button>
+          <button id="scrollToSolver" class="primary-btn">
+            Запустить решатель
+          </button>
+        </div>
+      </div>
+      <div class="hero__card">
+        <p>Визуализация шагов</p>
+        <div class="progress progress--preview">
+          <div class="progress__fill" style="width: 45%"></div>
+        </div>
+        <p class="muted">
+          Каждая доставка выделяется в таблице, а строка состояния показывает
+          прогресс построения плана перевозок.
+        </p>
+      </div>
+    </header>
+
+    <main id="solver" class="layout">
+      <section class="panel panel--wide">
+        <div class="panel__header">
+          <h2>Параметры задачи</h2>
+          <p>Количество узлов и генерация тестовых данных.</p>
+        </div>
+        <div class="grid grid--compact">
+          <label class="input-block">
+            <span>Поставщики</span>
+            <input
+              id="supplierCount"
+              type="number"
+              min="1"
+              max="6"
+              value="3"
+            />
+          </label>
+          <label class="input-block">
+            <span>Потребители</span>
+            <input
+              id="consumerCount"
+              type="number"
+              min="1"
+              max="6"
+              value="3"
+            />
+          </label>
+        </div>
+        <div class="panel__actions">
+          <button id="applySize" class="ghost-btn">Обновить сетку</button>
+          <button id="generateRandom" class="ghost-btn">Случайные данные</button>
+          <button id="solveBtn" class="primary-btn">Рассчитать план</button>
+        </div>
+        <p class="muted">
+          Вводите числа в таблицах ниже — достаточно нажать «Рассчитать», чтобы
+          увидеть анимацию метода северо-западного угла.
+        </p>
+      </section>
+
+      <section class="panel panel--wide">
+        <div class="panel__header">
+          <h2>Тарифы и запасы</h2>
+          <p>Все поля доступны для ручного редактирования.</p>
+        </div>
+        <div id="matrixContainer" class="matrix"></div>
+      </section>
+
+      <section class="panel panel--wide">
+        <div class="panel__header">
+          <h2>Анимация решения</h2>
+          <p id="note" class="muted note">Ждите визуализацию после запуска расчёта.</p>
+        </div>
+        <div class="animation-area">
+          <div class="animation-area__main">
+            <div id="animationGrid"></div>
+            <div class="progress" id="progressTrack" aria-live="polite">
+              <div class="progress__fill" id="progressFill"></div>
+            </div>
+          </div>
+          <div class="animation-area__steps">
+            <p class="label">Текущий шаг</p>
+            <p id="stepInfo" class="step-info">—</p>
+            <p class="label">Суммарная стоимость</p>
+            <p id="totalCost" class="step-info">—</p>
+          </div>
+        </div>
+        <div id="solutionArea" class="solution"></div>
+      </section>
+    </main>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>
