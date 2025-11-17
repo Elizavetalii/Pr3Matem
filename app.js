@@ -15,6 +15,8 @@ const solutionArea = document.getElementById("solutionArea");
 const scrollBtn = document.getElementById("scrollToSolver");
 const presetBtn = document.getElementById("generatePreset");
 const solverSection = document.getElementById("solver");
+const balancedMatrixEl = document.getElementById("balancedMatrix");
+const planPreviewEl = document.getElementById("planPreview");
 
 let currentRows = Number(supplierInput.value) || 3;
 let currentCols = Number(consumerInput.value) || 3;
@@ -213,6 +215,22 @@ const collectProblem = () => {
   };
 };
 
+const resetPreviews = () => {
+  if (balancedMatrixEl) {
+    balancedMatrixEl.innerHTML = `
+      <h3>Матрица стоимости</h3>
+      <p class="muted">Появится после расчёта.</p>
+    `;
+  }
+  if (planPreviewEl) {
+    planPreviewEl.innerHTML = `
+      <h3>Опорный план</h3>
+      <p class="muted">Здесь появится план в формате стоимость ↔ перевозка.</p>
+    `;
+  }
+  solutionArea.innerHTML = "";
+};
+
 const balanceProblem = (problem) => {
   const supplyTotal = problem.supply.reduce((acc, val) => acc + val, 0);
   const demandTotal = problem.demand.reduce((acc, val) => acc + val, 0);
@@ -343,6 +361,53 @@ const createTableStructure = (problem) => {
   return { table, cellRefs };
 };
 
+const renderBalancedMatrix = (problem) => {
+  if (!balancedMatrixEl) return;
+  const { table, cellRefs } = createTableStructure(problem);
+  Object.entries(cellRefs).forEach(([key, cell]) => {
+    const [row, col] = key.split("-").map(Number);
+    cell.textContent = formatNumber(problem.costs[row][col]);
+  });
+  table.classList.add("plan-table");
+  balancedMatrixEl.innerHTML = `
+    <h3>Матрица стоимости</h3>
+    <p class="muted">С учётом фиктивных узлов (если добавлены).</p>
+  `;
+  balancedMatrixEl.appendChild(table);
+};
+
+const renderPlanPreview = (problem, allocations) => {
+  if (!planPreviewEl) return;
+  const { table, cellRefs } = createTableStructure(problem);
+  Object.entries(cellRefs).forEach(([key, cell]) => {
+    const [row, col] = key.split("-").map(Number);
+    const qty = allocations[row]?.[col] ?? 0;
+    const wrapper = document.createElement("div");
+    wrapper.className = "plan-cell";
+    const costSpan = document.createElement("span");
+    costSpan.className = "plan-cell__cost";
+    costSpan.textContent = formatNumber(problem.costs[row][col]);
+    wrapper.appendChild(costSpan);
+    const allocSpan = document.createElement("span");
+    allocSpan.className = "plan-cell__alloc";
+    if (qty > EPS) {
+      wrapper.classList.add("plan-cell--active");
+      allocSpan.textContent = `[${formatNumber(qty)}]`;
+    } else {
+      allocSpan.textContent = "—";
+    }
+    wrapper.appendChild(allocSpan);
+    cell.innerHTML = "";
+    cell.appendChild(wrapper);
+  });
+  table.classList.add("plan-table");
+  planPreviewEl.innerHTML = `
+    <h3>Опорный план</h3>
+    <p class="muted">В скобках показан объём перевозки для тарифа.</p>
+  `;
+  planPreviewEl.appendChild(table);
+};
+
 const clearAnimation = () => {
   animationTimers.forEach((timer) => clearTimeout(timer));
   animationTimers.length = 0;
@@ -412,18 +477,22 @@ const renderSolution = (problem, allocations, totalCost) => {
 };
 
 const handleSolve = () => {
+  resetPreviews();
   try {
     setNote("Запускаем расчёт и проверяем балансировку...", "accent");
     const baseProblem = collectProblem();
     const { problem, note } = balanceProblem(baseProblem);
     setNote(note, "accent");
+    renderBalancedMatrix(problem);
     const { allocations, steps } = northwestCorner(problem);
     const totalCost = computeTotalCost(problem, allocations);
     animateSolution(problem, steps, allocations, totalCost);
+    renderPlanPreview(problem, allocations);
     renderSolution(problem, allocations, totalCost);
   } catch (error) {
     setNote(error.message, "error");
     clearAnimation();
+    resetPreviews();
   }
 };
 
@@ -459,3 +528,4 @@ presetBtn.addEventListener("click", () => {
 
 buildMatrix(currentRows, currentCols);
 generateRandomData();
+resetPreviews();

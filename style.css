@@ -145,6 +145,29 @@ body {
   color: var(--muted);
 }
 
+.preview-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin: 1.5rem 0 1rem;
+}
+
+.preview-card {
+  background: rgb(255 255 255 / 0.03);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 18px;
+  padding: 1.5rem;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.preview-card h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
 .grid {
   display: grid;
   gap: 1rem;
@@ -324,6 +347,49 @@ body {
 
 .sol-table td.active .cell-cost {
   color: #06283b;
+}
+
+.plan-table {
+  margin-top: 0.5rem;
+}
+
+.plan-table td {
+  padding: 0.85rem 0.4rem;
+}
+
+.plan-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.plan-cell__cost {
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.plan-cell__alloc {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.plan-cell--active {
+  background: rgb(140 241 255 / 0.12);
+  color: #04121d;
+  border-radius: 10px;
+}
+
+.plan-cell--active .plan-cell__cost {
+  color: #04121d;
+}
+
+.plan-cell--active .plan-cell__alloc {
+  color: #083049;
 }
 
 .cell {
