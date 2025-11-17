@@ -6,6 +6,7 @@ const matrixContainer = document.getElementById("matrixContainer");
 const generateRandomBtn = document.getElementById("generateRandom");
 const applySizeBtn = document.getElementById("applySize");
 const solveBtn = document.getElementById("solveBtn");
+const methodSelect = document.getElementById("methodSelect");
 const noteEl = document.getElementById("note");
 const animationGrid = document.getElementById("animationGrid");
 const stepInfoEl = document.getElementById("stepInfo");
@@ -18,6 +19,7 @@ const solverSection = document.getElementById("solver");
 const optimizeBtn = document.getElementById("optimizeBtn");
 const balancedMatrixEl = document.getElementById("balancedMatrix");
 const planPreviewEl = document.getElementById("planPreview");
+const initialLogEl = document.getElementById("initialLog");
 const answerSummaryEl = document.getElementById("answerSummary");
 const optimizationPanel = document.getElementById("optimizationPanel");
 const optimizationIntro = document.getElementById("optimizationIntro");
@@ -244,6 +246,9 @@ const resetPreviews = () => {
       <p class="muted">Здесь появится план в формате стоимость ↔ перевозка.</p>
     `;
   }
+  if (initialLogEl) {
+    initialLogEl.innerHTML = "";
+  }
   solutionArea.innerHTML = "";
   if (answerSummaryEl) {
     answerSummaryEl.textContent = "";
@@ -289,6 +294,20 @@ const balanceProblem = (problem) => {
   };
 };
 
+const describeCell = (problem, row, col) =>
+  `${problem.supplyLabels[row]} → ${problem.demandLabels[col]}`;
+
+const renderInitialLog = (entries) => {
+  if (!initialLogEl) return;
+  if (!entries.length) {
+    initialLogEl.innerHTML = "";
+    return;
+  }
+  initialLogEl.innerHTML = entries
+    .map((text) => `<p class="initial-log__entry">${text}</p>`)
+    .join("");
+};
+
 const northwestCorner = (problem) => {
   const supply = [...problem.supply];
   const demand = [...problem.demand];
@@ -315,7 +334,93 @@ const northwestCorner = (problem) => {
     }
   }
 
-  return { allocations, steps };
+  const log = steps.map(
+    ({ row, col, qty }, idx) =>
+      `<strong>NW-${idx + 1}.</strong> Назначаем ${formatNumber(qty)} в ${describeCell(
+        problem,
+        row,
+        col,
+      )} (северо-западный угол).`,
+  );
+  return { allocations, steps, log };
+};
+
+const minimumCostMethod = (problem) => {
+  const supply = [...problem.supply];
+  const demand = [...problem.demand];
+  const rows = supply.length;
+  const cols = demand.length;
+  const allocations = Array.from({ length: rows }, () => Array(cols).fill(0));
+  const cells = [];
+  for (let i = 0; i < rows; i += 1) {
+    for (let j = 0; j < cols; j += 1) {
+      cells.push({ row: i, col: j, cost: problem.costs[i][j] });
+    }
+  }
+  cells.sort((a, b) => {
+    if (a.cost === b.cost) {
+      if (a.row === b.row) return a.col - b.col;
+      return a.row - b.row;
+    }
+    return a.cost - b.cost;
+  });
+  const log = [
+    "Стартуем методом минимальной стоимости: сортируем ячейки по тарифу и заполняем от меньшего к большему.",
+  ];
+  cells.forEach((cell, idx) => {
+    if (supply[cell.row] <= EPS || demand[cell.col] <= EPS) return;
+    const qty = Math.min(supply[cell.row], demand[cell.col]);
+    if (qty <= EPS) return;
+    allocations[cell.row][cell.col] = qty;
+    supply[cell.row] -= qty;
+    demand[cell.col] -= qty;
+    log.push(
+      `<strong>MS-${idx + 1}.</strong> Стоимость ${formatNumber(
+        cell.cost,
+      )}. Назначаем ${formatNumber(qty)} в ${describeCell(
+        problem,
+        cell.row,
+        cell.col,
+      )}. Остатки: поставщик → ${formatNumber(supply[cell.row])}, потребитель → ${formatNumber(
+        demand[cell.col],
+      )}.`,
+    );
+  });
+  return { allocations, log };
+};
+
+const ensureNonDegenerate = (problem, allocations) => {
+  const rows = allocations.length;
+  const cols = allocations[0].length;
+  const required = rows + cols - 1;
+  const log = [];
+  const basisSet = new Set(
+    getBasisCells(allocations).map((cell) => `${cell.row}-${cell.col}`),
+  );
+  const candidates = [];
+  for (let i = 0; i < rows; i += 1) {
+    for (let j = 0; j < cols; j += 1) {
+      if (basisSet.has(`${i}-${j}`)) continue;
+      candidates.push({ row: i, col: j, cost: problem.costs[i][j] });
+    }
+  }
+  candidates.sort((a, b) => {
+    if (a.cost === b.cost) return a.row === b.row ? a.col - b.col : a.row - b.row;
+    return a.cost - b.cost;
+  });
+  while (basisSet.size < required && candidates.length) {
+    const cell = candidates.shift();
+    allocations[cell.row][cell.col] = 0;
+    basisSet.add(`${cell.row}-${cell.col}`);
+    log.push(
+      `Добавляем фиктивную нулевую поставку в ${describeCell(
+        problem,
+        cell.row,
+        cell.col,
+      )}, чтобы обеспечить ${required} базисных клеток.`,
+    );
+  }
+  return { allocations, log };
 };
 
 const computeTotalCost = (problem, allocations) =>
@@ -924,11 +1029,37 @@ const handleSolve = () => {
     const { problem, note } = balanceProblem(baseProblem);
     setNote(note, "accent");
     renderBalancedMatrix(problem);
-    const { allocations, steps } = northwestCorner(problem);
+    const method = methodSelect?.value || "minCost";
+    let allocations;
+    let steps = [];
+    let initialLog = [];
+    if (method === "northWest") {
+      const nw = northwestCorner(problem);
+      allocations = nw.allocations;
+      steps = nw.steps;
+      initialLog = nw.log;
+      initialLog.unshift("Метод: северо-западный угол. Идём по таблице слева направо, сверху вниз.");
+    } else {
+      const result = minimumCostMethod(problem);
+      allocations = result.allocations;
+      initialLog = result.log;
+    }
+    const degeneracy = ensureNonDegenerate(problem, allocations);
+    if (degeneracy.log.length) {
+      initialLog.push(...degeneracy.log);
+    }
+    renderInitialLog(initialLog);
     const totalCost = computeTotalCost(problem, allocations);
     animateSolution(problem, steps, allocations, totalCost);
     renderPlanPreview(problem, allocations);
-    renderSolution(problem, allocations, totalCost);
+    renderSolution(
+      problem,
+      allocations,
+      totalCost,
+      method === "minCost"
+        ? `Опорный план (метод минимальной стоимости). Начальная стоимость: ${formatNumber(totalCost)}.`
+        : `Опорный план (метод северо-западного угла). Начальная стоимость: ${formatNumber(totalCost)}.`,
+    );
     lastSolution = {
       problem,
       allocations: cloneMatrix(allocations),

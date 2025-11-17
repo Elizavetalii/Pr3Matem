@@ -202,6 +202,15 @@ body {
   font-size: 1rem;
 }
 
+.input-block select {
+  padding: 0.7rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(255 255 255 / 0.04);
+  color: var(--text);
+  font-size: 1rem;
+}
+
 .panel__actions {
   margin: 1.5rem 0;
   display: flex;
@@ -355,6 +364,24 @@ body {
 
 .sol-table td.active .cell-cost {
   color: #06283b;
+}
+
+.initial-log {
+  margin-top: 1.5rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 20px;
+  padding: 1.25rem;
+  background: rgb(255 255 255 / 0.02);
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.initial-log__entry {
+  margin-bottom: 0.75rem;
+}
+
+.initial-log__entry strong {
+  color: var(--accent);
 }
 
 .optimization-panel {

@@ -71,6 +71,13 @@
               value="3"
             />
           </label>
+          <label class="input-block">
+            <span>Метод построения плана</span>
+            <select id="methodSelect">
+              <option value="minCost">Минимальная стоимость</option>
+              <option value="northWest">Северо-западный угол</option>
+            </select>
+          </label>
         </div>
         <div class="panel__actions">
           <button id="applySize" class="ghost-btn">Обновить сетку</button>
@@ -92,6 +99,7 @@
           <p>Все поля доступны для ручного редактирования.</p>
         </div>
         <div id="matrixContainer" class="matrix"></div>
+        <div id="initialLog" class="initial-log"></div>
       </section>
 
       <section class="panel panel--wide">
